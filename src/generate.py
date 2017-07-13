@@ -463,6 +463,7 @@ def generate_C_header(structs, header):
     for i in structs:
         append_type_C_header(i, header_file)
     header.write("oci_container_container *oci_parse_file (const char *filename, struct libocispec_context *ctx, oci_parser_error *err);\n")
+    header.write("oci_container_container *oci_parse_file_f (FILE *stream, struct libocispec_context *ctx, oci_parser_error *err);\n")
     header.write("#endif\n")
 
 def generate_C_code(structs, header_name, c_file):
@@ -532,6 +533,33 @@ oci_container_container *oci_parse_file (const char *filename, struct libocispec
        memset (&tmp_ctx, 0, sizeof (tmp_ctx));
     }
     char *content = read_file (filename, &filesize);
+    char errbuf[1024];
+    if (content == NULL) {
+        *err = strdup ("cannot read the file");
+        return NULL;
+    }
+    tree = yajl_tree_parse (content, errbuf, sizeof(errbuf));
+    free (content);
+    if (tree == NULL) {
+        *err = strdup ("cannot parse the file");
+        return NULL;
+    }
+
+    oci_container_container *container = make_oci_container_container (tree, ctx, err);
+    yajl_tree_free (tree);
+    return container;
+}
+
+oci_container_container *oci_parse_file_f (FILE *stream, struct libocispec_context *ctx, oci_parser_error *err) {
+    yajl_val tree;
+    size_t filesize;
+    *err = NULL;
+    struct libocispec_context tmp_ctx;
+    if (!ctx) {
+       ctx = &tmp_ctx;
+       memset (&tmp_ctx, 0, sizeof (tmp_ctx));
+    }
+    char *content = fread_file (stream, &filesize);
     char errbuf[1024];
     if (content == NULL) {
         *err = strdup ("cannot read the file");
